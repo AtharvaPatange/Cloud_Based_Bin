@@ -14,7 +14,7 @@ jinja2==3.1.2
 # AI/ML - CPU Optimized (NO MediaPipe, NO TensorFlow)
 ultralytics==8.0.231
 opencv-python-headless==4.8.1.78
-numpy==1.24.3
+numpy
 pillow==10.1.0
 
 # Google Gemini AI
