@@ -35,9 +35,14 @@ os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
 
 import mediapipe as mp
 
-# Firebase for real-time database
-import firebase_admin
-from firebase_admin import credentials, db
+# Firebase for real-time database (optional)
+try:
+    import firebase_admin
+    from firebase_admin import credentials, db
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+    print("Warning: Firebase not available - install firebase-admin if needed")
 
 # Environment and Configuration
 from dotenv import load_dotenv
