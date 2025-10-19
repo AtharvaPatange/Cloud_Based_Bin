@@ -24,25 +24,30 @@ git push origin main
 ```
 
 ### Step 2: Update `requirements.txt` for Render
-Make sure your `requirements.txt` is production-ready:
+Make sure your `requirements.txt` is production-ready (already updated):
 ```txt
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-pydantic==2.5.0
-pydantic-settings==2.1.0
-python-dotenv==1.0.0
-jinja2==3.1.2
-ultralytics==8.0.231
-opencv-python-headless==4.8.1.78
-numpy
-pillow
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+pydantic==2.9.2
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+jinja2==3.1.4
+ultralytics==8.3.0
+opencv-python-headless==4.10.0.84
+numpy<2.0.0
+pillow==10.4.0
 google-generativeai
 qrcode[pil]==7.4.2
 websockets==12.0
-httpx==0.25.1
-aiohttp==3.9.1
-python-dateutil==2.8.2
+httpx==0.27.2
+aiohttp==3.10.10
+python-dateutil==2.9.0
+```
+
+**Important**: Also create `runtime.txt` to specify Python version:
+```txt
+python-3.12.0
 ```
 
 ### Step 3: Create Render Web Service
@@ -63,13 +68,15 @@ python-dateutil==2.8.2
 #### Build & Deploy Settings:
 - **Build Command**: 
 ```bash
-pip install -r requirements.txt
+pip install --upgrade pip && pip install -r requirements.txt
 ```
 
 - **Start Command**:
 ```bash
 uvicorn app:app --host 0.0.0.0 --port $PORT
 ```
+
+**Note**: The `runtime.txt` file ensures Python 3.12 is used (not 3.13)
 
 #### Instance Type:
 - Start with **Free tier** for testing
@@ -145,9 +152,17 @@ if not os.path.exists(MODEL_PATH):
 
 ## 🔍 Troubleshooting
 
-### Build Fails
+### Build Fails - Pydantic/Rust Error
+**Error**: `maturin failed`, `Read-only file system`, or `pydantic-core` compilation error
+**Root Cause**: Python 3.13 doesn't have prebuilt wheels for older pydantic versions
+**Solution**: 
+1. ✅ Create `runtime.txt` with `python-3.12.0`
+2. ✅ Update to pydantic 2.9.2+ (already done in requirements.txt)
+3. ✅ Use build command: `pip install --upgrade pip && pip install -r requirements.txt`
+
+### Build Fails - Dependencies
 **Error**: `Could not find a version that satisfies the requirement`
-**Solution**: Update `requirements.txt` with compatible versions
+**Solution**: Update `requirements.txt` with compatible versions (already updated)
 
 ### App Crashes
 **Check Logs**: Render Dashboard → Your Service → Logs
