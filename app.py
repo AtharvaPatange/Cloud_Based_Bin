@@ -71,6 +71,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create necessary directories if they don't exist
+Path("static").mkdir(exist_ok=True)
+Path("templates").mkdir(exist_ok=True)
+Path("models").mkdir(exist_ok=True)
+Path("uploads").mkdir(exist_ok=True)
+
 # Static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -741,11 +747,6 @@ def process_sensor_data(sensor_data: SensorData) -> Dict[str, Any]:
     }
 
 if __name__ == "__main__":
-    # Create necessary directories
-    Path("models").mkdir(exist_ok=True)
-    Path("static").mkdir(exist_ok=True) 
-    Path("templates").mkdir(exist_ok=True)
-    
     # Run the server
     uvicorn.run(
         "app:app",
