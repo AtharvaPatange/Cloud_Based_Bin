@@ -35,10 +35,6 @@ os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
 
 import mediapipe as mp
 
-# Firebase for real-time database
-import firebase_admin
-from firebase_admin import credentials, db
-
 # Environment and Configuration
 from dotenv import load_dotenv
 import uvicorn
@@ -47,11 +43,19 @@ from pydantic import BaseModel
 # Load environment variables
 load_dotenv()
 
-
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Firebase for real-time database (optional)
+try:
+    import firebase_admin
+    from firebase_admin import credentials, db
+    FIREBASE_AVAILABLE = True
+    logger.info("Firebase Admin SDK loaded successfully")
+except ImportError:
+    FIREBASE_AVAILABLE = False
+    logger.warning("Firebase Admin SDK not installed. Firebase features will be disabled.")
 
 # Initialize FastAPI
 app = FastAPI(
