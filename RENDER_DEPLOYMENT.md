@@ -160,6 +160,11 @@ if not os.path.exists(MODEL_PATH):
 2. ✅ Update to pydantic 2.9.2+ (already done in requirements.txt)
 3. ✅ Use build command: `pip install --upgrade pip && pip install -r requirements.txt`
 
+### App Fails - Module Not Found
+**Error**: `ModuleNotFoundError: No module named 'mediapipe'`
+**Root Cause**: Missing dependency in requirements.txt
+**Solution**: ✅ Added `mediapipe==0.10.18` to requirements.txt
+
 ### Build Fails - Dependencies
 **Error**: `Could not find a version that satisfies the requirement`
 **Solution**: Update `requirements.txt` with compatible versions (already updated)
