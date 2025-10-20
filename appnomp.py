@@ -468,22 +468,9 @@ class RecyclableWasteClassifier:
             model_dir = Path("models")
             model_dir.mkdir(exist_ok=True)
             
-            # Load detection model
-            # detection_paths = [
-            #     model_dir / "yolov8n.pt",
-            #     Path("/app/models/yolov8n.pt"),
-            #     Path("yolov8n.pt")
-            # ]
-            
-            # for path in detection_paths:
-            #     if path.exists():
-            #         yolo_detection_model = YOLO(str(path))
-            #         logger.info(f"✅ YOLO detection model loaded from {path}")
-            #         break
-            # else:
-            #     logger.info("📥 Downloading YOLOv8n detection model...")
-            #     yolo_detection_model = YOLO('yolov8n.pt')
-            #     logger.info("✅ YOLOv8n detection model downloaded")
+            # No separate detection model required — pose model is used for hand detection.
+            # Fallback person detection using a separate detection model is optional
+            # and intentionally omitted to reduce memory usage in CPU-only deployments.
             
             # Load classification model
             classification_paths = [
@@ -678,7 +665,9 @@ async def health_check():
             "yolo_classification": yolo_classification_model is not None,
             "gemini_configured": bool(os.getenv('GEMINI_API_KEY'))
         },
-        "hand_detection": "YOLOv8 Pose (CPU-optimized, no MediaPipe)"
+        "hand_detection": "YOLOv8 Pose (CPU-optimized, no MediaPipe)",
+        "detection_model_available": yolo_detection_model is not None,
+        "note": "This instance runs in pose-only mode; object detection model is optional and may be absent to save memory."
     }
 
 @app.post("/detect-hand-wrist")
@@ -719,17 +708,17 @@ async def detect_hand_wrist(request: ClassificationRequest):
         
         hand_bbox = hand_result["hand_bbox"]
         
-        # Detect objects in hand region using YOLO
-        if yolo_detection_model is None:
-            return {**hand_result, "object_in_hand": False, "message": "Detection model not loaded"}
-        
-        results = yolo_detection_model.predict(image, conf=0.3, iou=0.45, verbose=False)
-        
+        # Detect objects in hand region using YOLO (optional)
+        object_detection_available = yolo_detection_model is not None
+
         object_in_hand = False
         object_bbox = None
         cropped_image = None
         max_confidence = 0.0
         detected_objects = []
+
+        if object_detection_available:
+            results = yolo_detection_model.predict(image, conf=0.3, iou=0.45, verbose=False)
         
         for r in results:
             if hasattr(r, 'boxes') and r.boxes is not None:
@@ -786,12 +775,15 @@ async def detect_hand_wrist(request: ClassificationRequest):
         
         return {
             **hand_result,
+            "object_detection_available": object_detection_available,
             "object_in_hand": object_in_hand,
             "cropped_image": cropped_image,
             "object_bbox": object_bbox,
             "detected_objects": detected_objects,
             "confidence": float(max_confidence) if object_in_hand else hand_result["confidence"],
-            "message": "Hand, wrist, and object detected" if object_in_hand else "Hand/wrist detected, waiting for object"
+            "message": "Hand and object detected" if object_in_hand else (
+                "Hand/wrist detected; object detection not available" if not object_detection_available else "Hand/wrist detected, waiting for object"
+            )
         }
         
     except Exception as e:
@@ -919,10 +911,17 @@ if __name__ == "__main__":
     logger.info("🚀 Starting Sortyx Cloud Backend (CPU-optimized, no MediaPipe)")
     logger.info("✅ Hand detection: YOLOv8 Pose estimation")
     
+    # Ensure PORT is an integer (Render provides it as a string)
+    try:
+        port_value = int(os.getenv("PORT", "8000"))
+    except (TypeError, ValueError):
+        port_value = 8000
+
+    # When running this script directly, point uvicorn at this module (`appnomp:app`)
     uvicorn.run(
-        "app:app",
+        "appnomp:app",
         host="0.0.0.0",
-        port=os.getenv("PORT", 8000),
+        port=port_value,
         reload=True,
         log_level="info"
     )
