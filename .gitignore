@@ -47,9 +47,8 @@ Thumbs.db
 uploads/*
 !uploads/.gitkeep
 
-# Models (large files - use Git LFS if needed)
-# models/*.pt
-# Uncomment above if models are too large
+# Models (large files)
+
 
 # SSL Certificates
 ssl/
@@ -64,3 +63,16 @@ htmlcov/
 
 # Render specific
 .render/
+
+# Unnecessary deployment files
+app-railway.py
+app2.py
+app.py
+simple_server.py
+waste.py
+requirements-railway.txt
+k8s-deployment.yaml
+nginx.conf
+init.sql
+esp32_sensor_controller.ino
+FIX_SUMMARY.md

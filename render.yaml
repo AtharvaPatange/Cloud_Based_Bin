@@ -2,7 +2,7 @@ services:
   - type: web
     name: sortyx-waste-classifier
     runtime: python
-    plan: starter  # Use 'free' for testing, 'starter' for production
+    plan: starter  # REQUIRED: Free tier (512MB) is insufficient for YOLO models
     buildCommand: ./build.sh
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -10,7 +10,5 @@ services:
         value: 3.12.7
       - key: GEMINI_API_KEY
         sync: false  # Set this manually in Render dashboard
-      - key: PORT
-        value: 8000
     healthCheckPath: /health
     autoDeploy: true

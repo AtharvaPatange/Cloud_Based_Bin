@@ -26,8 +26,6 @@ qrcode[pil]==7.4.2
 # WebSocket Support
 websockets==12.0
 
-# Optional - Firebase (comment out if not needed)
-# firebase-admin==6.2.0
 
 # HTTP Client
 httpx==0.27.2

@@ -469,21 +469,21 @@ class RecyclableWasteClassifier:
             model_dir.mkdir(exist_ok=True)
             
             # Load detection model
-            detection_paths = [
-                model_dir / "yolov8n.pt",
-                Path("/app/models/yolov8n.pt"),
-                Path("yolov8n.pt")
-            ]
+            # detection_paths = [
+            #     model_dir / "yolov8n.pt",
+            #     Path("/app/models/yolov8n.pt"),
+            #     Path("yolov8n.pt")
+            # ]
             
-            for path in detection_paths:
-                if path.exists():
-                    yolo_detection_model = YOLO(str(path))
-                    logger.info(f"✅ YOLO detection model loaded from {path}")
-                    break
-            else:
-                logger.info("📥 Downloading YOLOv8n detection model...")
-                yolo_detection_model = YOLO('yolov8n.pt')
-                logger.info("✅ YOLOv8n detection model downloaded")
+            # for path in detection_paths:
+            #     if path.exists():
+            #         yolo_detection_model = YOLO(str(path))
+            #         logger.info(f"✅ YOLO detection model loaded from {path}")
+            #         break
+            # else:
+            #     logger.info("📥 Downloading YOLOv8n detection model...")
+            #     yolo_detection_model = YOLO('yolov8n.pt')
+            #     logger.info("✅ YOLOv8n detection model downloaded")
             
             # Load classification model
             classification_paths = [
