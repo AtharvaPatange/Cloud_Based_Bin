@@ -719,7 +719,11 @@ async def detect_hand_wrist(request: ClassificationRequest):
 
         if object_detection_available:
             results = yolo_detection_model.predict(image, conf=0.3, iou=0.45, verbose=False)
-        
+        else:
+            # No detection model available; set empty results so loops below are skipped
+            results = []
+
+        # Iterate over detection results (empty if detection model not available)
         for r in results:
             if hasattr(r, 'boxes') and r.boxes is not None:
                 for box in r.boxes:
@@ -794,6 +798,20 @@ async def detect_hand_wrist(request: ClassificationRequest):
             "object_in_hand": False,
             "message": f"Error: {str(e)}"
         }
+
+# Alias for older frontend routes: keep backwards compatibility
+@app.post("/detect-hand")
+async def detect_hand_alias(request: ClassificationRequest):
+    """
+    Backwards-compatible alias: call the real detect_hand_wrist route and
+    ensure response includes `num_hands` (used by frontend).
+    """
+    result = await detect_hand_wrist(request)  # call existing handler
+    # ensure `num_hands` exists (frontend checks it)
+    if isinstance(result, dict):
+        result.setdefault("num_hands", result.get("keypoints_count", 0))
+    return result
+
 
 @app.post("/classify", response_model=ClassificationResponse)
 async def classify_waste(request: ClassificationRequest, background_tasks: BackgroundTasks):
@@ -907,21 +925,19 @@ if __name__ == "__main__":
     Path("models").mkdir(exist_ok=True)
     Path("static").mkdir(exist_ok=True)
     Path("templates").mkdir(exist_ok=True)
-    
+
     logger.info("🚀 Starting Sortyx Cloud Backend (CPU-optimized, no MediaPipe)")
     logger.info("✅ Hand detection: YOLOv8 Pose estimation")
-    
-    # Ensure PORT is an integer (Render provides it as a string)
+
     try:
         port_value = int(os.getenv("PORT", "8000"))
     except (TypeError, ValueError):
         port_value = 8000
 
-    # When running this script directly, point uvicorn at this module (`appnomp:app`)
+    # Run the FastAPI app directly (pass app object, no auto-reload)
     uvicorn.run(
-        "appnomp:app",
+        app,
         host="0.0.0.0",
         port=port_value,
-        reload=True,
         log_level="info"
     )
