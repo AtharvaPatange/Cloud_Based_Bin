@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Sortyx Cloud Backend - CPU Optimized Version
@@ -28,6 +29,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
+import asyncio
 
 # AI/ML Libraries (CPU-optimized)
 import cv2
@@ -49,6 +54,16 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Timeout middleware for Render deployment
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        try:
+            # Set timeout for requests (25 seconds for Render)
+            return await asyncio.wait_for(call_next(request), timeout=25.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Request timeout: {request.url.path}")
+            return Response("Request timeout", status_code=504)
+
 # Initialize FastAPI
 app = FastAPI(
     title="Sortyx Recyclable Waste Classification API",
@@ -57,6 +72,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Add timeout middleware
+app.add_middleware(TimeoutMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -296,7 +314,8 @@ class HandWristDetector:
             logger.info(f"📸 Processing image: {w}x{h} pixels")
             
             # Run pose detection with VERY LOW confidence threshold for better detection
-            results = self.pose_model(image, conf=0.1, iou=0.5, verbose=False)  # Lowered from 0.2 to 0.1
+            # Reduced imgsz for faster processing on Render
+            results = self.pose_model(image, conf=0.1, iou=0.5, verbose=False, imgsz=480)  # Reduced from default 640
             
             logger.info(f"🔍 Pose detection completed, checking for keypoints...")
             
@@ -677,10 +696,15 @@ async def detect_hand_wrist(request: ClassificationRequest):
     CPU-optimized - no GPU or MediaPipe required
     """
     try:
-        # Decode image
+        # Decode image with size limit check
         image_data = base64.b64decode(
             request.image_base64.split(',')[1] if ',' in request.image_base64 else request.image_base64
         )
+        
+        # Check image size to prevent memory issues
+        if len(image_data) > 5 * 1024 * 1024:  # 5MB limit
+            raise HTTPException(status_code=413, detail="Image too large. Maximum size is 5MB.")
+        
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
@@ -693,6 +717,16 @@ async def detect_hand_wrist(request: ClassificationRequest):
             }
         
         h, w, _ = image.shape
+        
+        # Resize large images to prevent timeout (max 640px)
+        max_dimension = 640
+        if max(h, w) > max_dimension:
+            scale = max_dimension / max(h, w)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            h, w, _ = image.shape
+            logger.info(f"Resized image to {w}x{h} for faster processing")
         
         # Detect hand and wrist using YOLO Pose
         hand_result = classifier.hand_detector.detect_hand_wrist(image)
@@ -899,17 +933,25 @@ async def get_statistics():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint"""
+    """WebSocket endpoint with keepalive"""
     await websocket.accept()
     connected_websockets.append(websocket)
     logger.info("WebSocket connected")
     
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                # Send keepalive ping every 30 seconds
+                await asyncio.sleep(30)
+                await websocket.send_json({"type": "ping", "timestamp": datetime.now().isoformat()})
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                break
     except WebSocketDisconnect:
-        connected_websockets.remove(websocket)
         logger.info("WebSocket disconnected")
+    finally:
+        if websocket in connected_websockets:
+            connected_websockets.remove(websocket)
 
 async def notify_websocket_clients(message: Dict[str, Any]):
     """Notify WebSocket clients"""
@@ -934,10 +976,14 @@ if __name__ == "__main__":
     except (TypeError, ValueError):
         port_value = 8000
 
-    # Run the FastAPI app directly (pass app object, no auto-reload)
+    # Run the FastAPI app with optimized settings for Render
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=port_value,
-        log_level="info"
+        log_level="info",
+        timeout_keep_alive=75,  # Keep connections alive longer
+        limit_concurrency=10,   # Limit concurrent requests
+        backlog=50,             # Connection backlog
+        workers=1               # Single worker to prevent memory issues
     )

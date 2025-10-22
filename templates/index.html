@@ -1602,15 +1602,23 @@
                 };
                 
                 websocket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        // Handle ping/pong for keepalive
+                        if (data.type === 'ping') {
+                            return; // Ignore keepalive pings
+                        }
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        console.error('Error parsing WebSocket message:', e);
+                    }
                 };
                 
                 websocket.onclose = () => {
                     console.log('WebSocket disconnected');
                     updateStatus(false, 'Disconnected');
-                    // Attempt to reconnect after 3 seconds
-                    setTimeout(initializeWebSocket, 3000);
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(initializeWebSocket, 5000);
                 };
                 
                 websocket.onerror = (error) => {
@@ -1621,6 +1629,8 @@
             } catch (error) {
                 console.error('WebSocket initialization failed:', error);
                 updateStatus(false, 'WebSocket Error');
+                // Retry after 5 seconds
+                setTimeout(initializeWebSocket, 5000);
             }
         }
 
@@ -1666,9 +1676,12 @@
             try {
                 // Capture frame from camera
                 context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                const imageData = canvas.toDataURL('image/jpeg', 0.7); // Reduced quality to 0.7 for faster upload
                 
-                // Send to backend for MediaPipe-based hand detection
+                // Send to backend for hand detection with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+                
                 const response = await fetch('/detect-hand', {
                     method: 'POST',
                     headers: {
@@ -1676,8 +1689,11 @@
                     },
                     body: JSON.stringify({
                         image_base64: imageData
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     console.error('Hand detection failed:', response.statusText);
@@ -1700,7 +1716,14 @@
                     await classifyWasteAuto(result.cropped_image || imageData);
                 }
             } catch (error) {
-                console.error('Hand detection error:', error);
+                // Handle different error types
+                if (error.name === 'AbortError') {
+                    console.warn('⏱️ Hand detection timeout - server is slow, retrying...');
+                } else if (error.message.includes('Failed to fetch')) {
+                    console.error('🔌 Connection error - retrying...', error.message);
+                } else {
+                    console.error('Hand detection error:', error);
+                }
                 // Don't stop scanning on error, just log it
             }
         }
@@ -1725,7 +1748,10 @@
             try {
                 console.log('📤 Sending image for classification...');
                 
-                // Use the cropped image with hand
+                // Use the cropped image with hand - add timeout for classification
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+                
                 const response = await fetch('/classify', {
                     method: 'POST',
                     headers: {
@@ -1735,8 +1761,11 @@
                         image_base64: croppedImage,
                         location: 'main_facility',
                         classification_method: classificationMethod
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -1775,7 +1804,18 @@
                 
             } catch (error) {
                 console.error('❌ Classification error:', error);
-                document.getElementById('scanStatus').innerHTML = `❌ <strong>Classification failed:</strong> ${error.message}`;
+                
+                // Better error messages
+                let errorMsg = 'Classification failed';
+                if (error.name === 'AbortError') {
+                    errorMsg = 'Request timeout - server is slow';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMsg = 'Connection lost - check server';
+                } else {
+                    errorMsg = error.message || 'Unknown error';
+                }
+                
+                document.getElementById('scanStatus').innerHTML = `❌ <strong>${errorMsg}</strong>`;
                 
                 // Clear any existing timeouts
                 if (resetTimeout) {
