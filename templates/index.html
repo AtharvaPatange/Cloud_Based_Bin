@@ -1649,12 +1649,12 @@
 
         // Continuous scanning functions
         function startContinuousScanning() {
-            // Scan for hands every 800ms (using YOLO detection)
+            // Scan for hands every 1500ms (reduced frequency to prevent server overload)
             scanningInterval = setInterval(async () => {
                 if (!isClassifying && continuousScanning) {
                     await detectHand();
                 }
-            }, 800);
+            }, 1500); // Increased from 800ms
         }
 
         function stopContinuousScanning() {
@@ -1680,7 +1680,7 @@
                 
                 // Send to backend for hand detection with timeout
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 second timeout (reduced)
                 
                 const response = await fetch('/detect-hand', {
                     method: 'POST',
@@ -1750,7 +1750,7 @@
                 
                 // Use the cropped image with hand - add timeout for classification
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced)
                 
                 const response = await fetch('/classify', {
                     method: 'POST',

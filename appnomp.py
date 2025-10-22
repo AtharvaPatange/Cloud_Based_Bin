@@ -58,8 +58,8 @@ logger = logging.getLogger(__name__)
 class TimeoutMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: StarletteRequest, call_next):
         try:
-            # Set timeout for requests (25 seconds for Render)
-            return await asyncio.wait_for(call_next(request), timeout=25.0)
+            # Set timeout for requests (15 seconds - reduced for faster response)
+            return await asyncio.wait_for(call_next(request), timeout=15.0)
         except asyncio.TimeoutError:
             logger.error(f"Request timeout: {request.url.path}")
             return Response("Request timeout", status_code=504)
@@ -314,8 +314,17 @@ class HandWristDetector:
             logger.info(f"📸 Processing image: {w}x{h} pixels")
             
             # Run pose detection with VERY LOW confidence threshold for better detection
-            # Reduced imgsz for faster processing on Render
-            results = self.pose_model(image, conf=0.1, iou=0.5, verbose=False, imgsz=480)  # Reduced from default 640
+            # Reduced imgsz and disabled augmentations for faster processing on Render
+            results = self.pose_model(
+                image, 
+                conf=0.05,      # Lower confidence threshold
+                iou=0.5, 
+                verbose=False, 
+                imgsz=320,      # Reduced from 480 for speed
+                half=False,     # No half precision on CPU
+                augment=False,  # Disable augmentations
+                max_det=1       # Only detect 1 person (faster)
+            )
             
             logger.info(f"🔍 Pose detection completed, checking for keypoints...")
             
@@ -328,6 +337,11 @@ class HandWristDetector:
                         # Get first person's keypoints
                         kpts = keypoints[0].cpu().numpy()
                         logger.info(f"👤 Person detected with {len(kpts)} keypoints")
+                        
+                        # Check if keypoints array is valid
+                        if len(kpts) < 17:
+                            logger.warning(f"⚠️ Insufficient keypoints detected ({len(kpts)}/17)")
+                            continue
                         
                         # Extract wrist and arm positions
                         left_wrist = kpts[self.LEFT_WRIST]
@@ -348,8 +362,8 @@ class HandWristDetector:
                         hand_bbox = None
                         hand_confidence = 0.0
                         
-                        # Use the wrist with highest confidence (VERY LOW threshold 0.15)
-                        if left_wrist[2] > 0.15 or right_wrist[2] > 0.15:
+                        # Use the wrist with highest confidence (VERY LOW threshold 0.05 for CPU)
+                        if left_wrist[2] > 0.05 or right_wrist[2] > 0.05:
                             if left_wrist[2] > right_wrist[2]:
                                 # Use left hand
                                 wrist_x, wrist_y, wrist_conf = left_wrist
@@ -420,19 +434,14 @@ class HandWristDetector:
                             }
                         else:
                             logger.warning(f"⚠️ Wrist confidence too low (L:{left_wrist[2]:.3f}, R:{right_wrist[2]:.3f})")
-                            logger.info("🔄 Trying fallback detection method...")
+                            # Skip fallback to save time - just return no detection
                     else:
                         logger.warning("⚠️ No keypoints found in detection")
                 else:
                     logger.warning("⚠️ No keypoints attribute in results")
             
-            # If pose detection failed, try fallback method
-            logger.info("🔄 Pose detection failed, attempting fallback...")
-            fallback_result = self.detect_person_fallback(image)
-            if fallback_result:
-                return fallback_result
-            
-            logger.info("❌ No person or hands detected in image (both methods failed)")
+            # Skip fallback method to prevent timeout - return no detection instead
+            logger.info("❌ No hands detected with sufficient confidence")
             return {
                 "hand_detected": False,
                 "wrist_detected": False,
@@ -440,20 +449,13 @@ class HandWristDetector:
                 "wrist_position": None,
                 "confidence": 0.0,
                 "keypoints_count": 0,
-                "message": "No person or hands detected"
+                "message": "No hands detected"
             }
             
         except Exception as e:
             logger.error(f"❌ Hand detection error: {e}", exc_info=True)
             
-            # Try fallback on error
-            try:
-                fallback_result = self.detect_person_fallback(image)
-                if fallback_result:
-                    return fallback_result
-            except:
-                pass
-            
+            # Skip fallback on error to prevent timeout
             return {
                 "hand_detected": False,
                 "wrist_detected": False,
@@ -982,8 +984,8 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port_value,
         log_level="info",
-        timeout_keep_alive=75,  # Keep connections alive longer
-        limit_concurrency=10,   # Limit concurrent requests
-        backlog=50,             # Connection backlog
+        timeout_keep_alive=30,  # Reduced to 30 seconds
+        limit_concurrency=3,    # Reduced to 3 concurrent requests
+        backlog=20,             # Reduced backlog
         workers=1               # Single worker to prevent memory issues
     )
