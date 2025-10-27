@@ -67,7 +67,6 @@ htmlcov/
 # Unnecessary deployment files
 app-railway.py
 app2.py
-app.py
 simple_server.py
 waste.py
 requirements-railway.txt
